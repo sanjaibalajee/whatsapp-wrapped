@@ -4,6 +4,7 @@ import sys
 import json
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from parser import parse_whatsapp, detect_group_names, merge_similar_contacts
 from stats import (
@@ -28,37 +29,38 @@ from display import (
 console = Console()
 
 
-def prepare_llm_context(df, max_sample_messages=50):
+def prepare_llm_context(df, user_df=None, max_sample_messages=50):
     # condense everything for llm consumption
-    user_df = df[~df['is_system']]
+    if user_df is None:
+        user_df = df[~df['is_system']]
 
-    basic_stats = get_basic_stats(df)
-    emoji_stats = get_emoji_stats(df)
-    hourly = get_hourly_activity(df)
+    basic_stats = get_basic_stats(df, user_df)
+    emoji_stats = get_emoji_stats(df, user_df)
+    hourly = get_hourly_activity(df, user_df)
 
     stats_cache = {
-        'double_texters': get_double_texters(df),
-        'conv_killers': get_conversation_killers(df),
-        'response_times': get_response_times(df),
-        'caps_users': get_caps_users(df),
-        'question_askers': get_question_askers(df),
-        'link_sharers': get_link_sharers(df),
-        'one_worders': get_one_worders(df),
-        'night_owls': get_night_owls(df),
-        'early_birds': get_early_birds(df),
-        'monologuers': get_monologuers(df),
-        'laugh_stats': get_laugh_stats(df),
-        'top_chatters': get_top_chatters(df),
-        'longest_msgs': get_longest_messages(df),
-        'conv_starters': get_conversation_starters(df),
-        'media_stats': get_media_stats(df),
-        'emoji_stats': get_emoji_stats_by_user(df),
+        'double_texters': get_double_texters(df, user_df),
+        'conv_killers': get_conversation_killers(df, user_df),
+        'response_times': get_response_times(df, user_df),
+        'caps_users': get_caps_users(df, user_df),
+        'question_askers': get_question_askers(df, user_df),
+        'link_sharers': get_link_sharers(df, user_df),
+        'one_worders': get_one_worders(df, user_df),
+        'night_owls': get_night_owls(df, user_df),
+        'early_birds': get_early_birds(df, user_df),
+        'monologuers': get_monologuers(df, user_df),
+        'laugh_stats': get_laugh_stats(df, user_df),
+        'top_chatters': get_top_chatters(df, user_df),
+        'longest_msgs': get_longest_messages(df, user_df),
+        'conv_starters': get_conversation_starters(df, user_df),
+        'media_stats': get_media_stats(df, user_df),
+        'emoji_stats': get_emoji_stats_by_user(df, user_df),
     }
 
     personality_tags = assign_personality_tags(df, stats_cache)
-    unique_words = get_unique_words_per_person(df)
-    catchphrases = get_catchphrases(df)
-    group_vibe = get_group_vibe(df, emoji_stats, hourly)
+    unique_words = get_unique_words_per_person(df, user_df)
+    catchphrases = get_catchphrases(df, user_df)
+    group_vibe = get_group_vibe(df, emoji_stats, hourly, user_df)
 
     # sample msgs proportionally
     sample_messages = []
@@ -110,7 +112,7 @@ def prepare_llm_context(df, max_sample_messages=50):
             "date_range": f"{basic_stats['first_message'].strftime('%Y-%m-%d')} to {basic_stats['last_message'].strftime('%Y-%m-%d')}" if basic_stats else "",
             "vibe": group_vibe,
         },
-        "top_topics": get_interesting_topics(df)[:15],
+        "top_topics": get_interesting_topics(df, user_df)[:15],
         "top_emojis": list(emoji_stats.keys())[:10] if emoji_stats else [],
         "person_profiles": person_profiles,
         "sample_messages": sample_messages[:max_sample_messages],
@@ -119,7 +121,7 @@ def prepare_llm_context(df, max_sample_messages=50):
     return context, personality_tags, unique_words, catchphrases, group_vibe
 
 
-def run_wrapped(file_path, show_llm_context=False):
+def run_wrapped(file_path, show_llm_context=False, year=2025, full=False):
     console.print(f"\n[dim]Loading chat from {file_path}...[/dim]\n")
 
     try:
@@ -141,60 +143,93 @@ def run_wrapped(file_path, show_llm_context=False):
     # then detect group names
     df, group_names, current_group_name = detect_group_names(df)
 
-    console.print("[dim]Analyzing chat patterns...[/dim]\n")
+    # filter to target year only - this is WRAPPED not all-time stats
+    total_before = len(df)
+    df = df[df['datetime'].dt.year == year].copy()
+    total_after = len(df)
 
-    # basic stats
-    basic_stats = get_basic_stats(df)
-    top_chatters = get_top_chatters(df)
-    hourly = get_hourly_activity(df)
-    daily = get_daily_activity(df)
-    emojis = get_emoji_stats(df)
-    user_emojis = get_emoji_stats_by_user(df)
-    media = get_media_stats(df)
-    words = get_word_stats(df)
-    starters = get_conversation_starters(df)
-    night_owls = get_night_owls(df)
-    early_birds = get_early_birds(df)
-    longest_msgs = get_longest_messages(df)
-    busiest_dates = get_busiest_dates(df)
-    response_pairs = get_response_pairs(df)
+    if df.empty:
+        console.print(f"[red]No messages found for {year}![/red]")
+        console.print(f"[dim]Total messages in file: {total_before}[/dim]")
+        return
 
-    # behavioral
-    double_texters = get_double_texters(df)
-    conv_killers = get_conversation_killers(df)
-    response_times = get_response_times(df)
-    streak_stats = get_streak_stats(df)
+    console.print(f"[dim]Filtered to {year}: {total_after:,} messages (from {total_before:,} total)[/dim]")
 
-    # personality
-    unique_words = get_unique_words_per_person(df)
-    catchphrases = get_catchphrases(df)
+    # verify filter worked
+    years_in_data = df['datetime'].dt.year.unique()
+    if len(years_in_data) > 1 or (len(years_in_data) == 1 and years_in_data[0] != year):
+        console.print(f"[red]WARNING: Filter issue! Years in data: {sorted(years_in_data)}[/red]")
 
-    stats_cache = {
-        'double_texters': double_texters,
-        'conv_killers': conv_killers,
-        'response_times': response_times,
-        'caps_users': get_caps_users(df),
-        'question_askers': get_question_askers(df),
-        'link_sharers': get_link_sharers(df),
-        'one_worders': get_one_worders(df),
-        'night_owls': night_owls,
-        'early_birds': early_birds,
-        'monologuers': get_monologuers(df),
-        'laugh_stats': get_laugh_stats(df),
-        'top_chatters': top_chatters,
-        'longest_msgs': longest_msgs,
-        'conv_starters': starters,
-        'media_stats': media,
-        'emoji_stats': user_emojis,
-    }
+    # pre-filter user messages once - pass to all stats functions
+    user_df = df[~df['is_system']].copy()
 
-    personality_tags = assign_personality_tags(df, stats_cache)
-    group_vibe = get_group_vibe(df, emojis, hourly)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+        transient=True
+    ) as progress:
+        task = progress.add_task("Analyzing chat patterns...", total=None)
+
+        # basic stats - pass user_df to avoid repeated filtering
+        basic_stats = get_basic_stats(df, user_df)
+        top_chatters = get_top_chatters(df, user_df)
+        hourly = get_hourly_activity(df, user_df)
+        daily = get_daily_activity(df, user_df)
+
+        progress.update(task, description="Analyzing emojis and media...")
+        emojis = get_emoji_stats(df, user_df)
+        user_emojis = get_emoji_stats_by_user(df, user_df)
+        media = get_media_stats(df, user_df)
+        words = get_word_stats(df, user_df, top_n=50 if full else 20)
+
+        progress.update(task, description="Analyzing conversation patterns...")
+        starters = get_conversation_starters(df, user_df)
+        night_owls = get_night_owls(df, user_df)
+        early_birds = get_early_birds(df, user_df)
+        longest_msgs = get_longest_messages(df, user_df)
+        busiest_dates = get_busiest_dates(df, user_df)
+        response_pairs = get_response_pairs(df, user_df)
+
+        progress.update(task, description="Analyzing behavioral patterns...")
+        double_texters = get_double_texters(df, user_df)
+        conv_killers = get_conversation_killers(df, user_df)
+        response_times = get_response_times(df, user_df)
+        streak_stats = get_streak_stats(df, user_df)
+
+        progress.update(task, description="Extracting signature words...")
+        unique_words = get_unique_words_per_person(df, user_df, top_n=15 if full else 10)
+        catchphrases = get_catchphrases(df, user_df)
+
+        progress.update(task, description="Building personality profiles...")
+        stats_cache = {
+            'double_texters': double_texters,
+            'conv_killers': conv_killers,
+            'response_times': response_times,
+            'caps_users': get_caps_users(df, user_df),
+            'question_askers': get_question_askers(df, user_df),
+            'link_sharers': get_link_sharers(df, user_df),
+            'one_worders': get_one_worders(df, user_df),
+            'night_owls': night_owls,
+            'early_birds': early_birds,
+            'monologuers': get_monologuers(df, user_df),
+            'laugh_stats': get_laugh_stats(df, user_df),
+            'top_chatters': top_chatters,
+            'longest_msgs': longest_msgs,
+            'conv_starters': starters,
+            'media_stats': media,
+            'emoji_stats': user_emojis,
+        }
+
+        personality_tags = assign_personality_tags(df, stats_cache)
+        group_vibe = get_group_vibe(df, emojis, hourly, user_df, full=full)
+
+    console.print()
 
     # display everything
-    display_header(basic_stats, current_group_name)
+    display_header(basic_stats, current_group_name, year)
     display_basic_stats(basic_stats)
-    display_group_vibe(group_vibe)
+    display_group_vibe(group_vibe, full=full)
     display_top_chatters(top_chatters)
     display_streak_stats(streak_stats)
     display_hourly_activity(hourly)
@@ -202,9 +237,9 @@ def run_wrapped(file_path, show_llm_context=False):
     display_response_times(response_times)
     display_emoji_stats(emojis, user_emojis)
     display_media_stats(media)
-    display_word_stats(words)
-    display_unique_words(unique_words)
-    display_catchphrases(catchphrases)
+    display_word_stats(words, full=full)
+    display_unique_words(unique_words, full=full)
+    display_catchphrases(catchphrases, full=full)
     display_special_stats(starters, night_owls, early_birds, longest_msgs)
     display_double_texters(double_texters)
     display_conversation_killers(conv_killers)
@@ -215,7 +250,7 @@ def run_wrapped(file_path, show_llm_context=False):
 
     # llm context for future ai stuff
     if show_llm_context:
-        llm_context, _, _, _, _ = prepare_llm_context(df)
+        llm_context, _, _, _, _ = prepare_llm_context(df, user_df)
         display_llm_context(llm_context)
 
         with open("llm_context.json", "w") as f:
@@ -233,11 +268,19 @@ def run_wrapped(file_path, show_llm_context=False):
 if __name__ == "__main__":
     file_path = "chat.txt"
     show_llm = False
+    full_output = False
+    target_year = 2025  # default to current wrapped year
 
-    for arg in sys.argv[1:]:
+    for i, arg in enumerate(sys.argv[1:]):
         if arg == "--llm-context":
             show_llm = True
+        elif arg == "--full":
+            full_output = True
+        elif arg == "--year" and i + 2 < len(sys.argv):
+            target_year = int(sys.argv[i + 2])
+        elif arg.isdigit() and sys.argv[i] == "--year":
+            pass  # already handled
         elif not arg.startswith("-"):
             file_path = arg
 
-    run_wrapped(file_path, show_llm_context=show_llm)
+    run_wrapped(file_path, show_llm_context=show_llm, year=target_year, full=full_output)

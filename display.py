@@ -11,19 +11,19 @@ from roasts import generate_roast
 console = Console()
 
 
-def display_header(basic_stats, group_name=None):
+def display_header(basic_stats, group_name=None, year=2025):
     console.print()
 
     if group_name:
         header_text = (
-            f"[bold magenta]WhatsApp Wrapped 2025[/bold magenta]\n"
+            f"[bold magenta]WhatsApp Wrapped {year}[/bold magenta]\n"
             f"[cyan]{group_name}[/cyan]\n"
             f"[dim]Your year in messages[/dim]"
         )
     else:
         header_text = (
-            "[bold magenta]WhatsApp Wrapped 2025[/bold magenta]\n"
-            "[dim]Your year in messages[/dim]"
+            f"[bold magenta]WhatsApp Wrapped {year}[/bold magenta]\n"
+            f"[dim]Your year in messages[/dim]"
         )
 
     console.print(Panel.fit(
@@ -186,26 +186,35 @@ def display_media_stats(media):
     console.print()
 
 
-def display_word_stats(words):
+def display_word_stats(words, full=False):
     if not words:
         return
 
     word_list = []
     max_count = max(words.values())
 
-    for word, count in words.items():
-        if count > max_count * 0.7:
-            word_list.append(f"[bold cyan]{word}[/bold cyan]")
-        elif count > max_count * 0.4:
-            word_list.append(f"[cyan]{word}[/cyan]")
-        else:
-            word_list.append(f"[dim]{word}[/dim]")
-
-    console.print(Panel(
-        "  ".join(word_list),
-        title="Most Used Words",
-        border_style="blue"
-    ))
+    # show all words with counts in full mode
+    if full:
+        for word, count in words.items():
+            word_list.append(f"{word} ({count})")
+        console.print(Panel(
+            "  ".join(word_list),
+            title="Most Used Words (Full)",
+            border_style="blue"
+        ))
+    else:
+        for word, count in words.items():
+            if count > max_count * 0.7:
+                word_list.append(f"[bold cyan]{word}[/bold cyan]")
+            elif count > max_count * 0.4:
+                word_list.append(f"[cyan]{word}[/cyan]")
+            else:
+                word_list.append(f"[dim]{word}[/dim]")
+        console.print(Panel(
+            "  ".join(word_list),
+            title="Most Used Words",
+            border_style="blue"
+        ))
     console.print()
 
 
@@ -320,44 +329,54 @@ def display_personality_tags(personality_tags):
     console.print()
 
 
-def display_unique_words(unique_words):
+def display_unique_words(unique_words, full=False):
     if not unique_words:
         return
 
-    table = Table(title="Signature Words (TF-IDF)", box=box.ROUNDED, border_style="blue")
+    title = "Signature Words (TF-IDF)" + (" - Full" if full else "")
+    table = Table(title=title, box=box.ROUNDED, border_style="blue")
     table.add_column("Member", style="cyan")
     table.add_column("Their Words", style="dim")
 
-    for sender, words in list(unique_words.items())[:6]:
+    # show all users and more words in full mode
+    user_limit = None if full else 6
+    word_limit = 10 if full else 5
+
+    for sender, words in list(unique_words.items())[:user_limit]:
         name = sender[:15] + "..." if len(sender) > 15 else sender
-        word_list = list(words.keys())[:5]
+        word_list = list(words.keys())[:word_limit]
         table.add_row(name, ", ".join(word_list))
 
     console.print(table)
     console.print()
 
 
-def display_catchphrases(catchphrases):
+def display_catchphrases(catchphrases, full=False):
     if not catchphrases:
         return
 
     console.print(Panel("[bold]Catchphrases[/bold]", border_style="yellow"))
 
-    for sender, phrases in list(catchphrases.items())[:5]:
+    # show all users and phrases in full mode
+    user_limit = None if full else 5
+    phrase_limit = 5 if full else 1
+
+    for sender, phrases in list(catchphrases.items())[:user_limit]:
         name = sender.split()[0]
-        top_phrase = phrases[0]['phrase'] if phrases else None
-        if top_phrase:
-            console.print(f"  [cyan]{name}[/cyan]: \"{top_phrase}\" ({phrases[0]['count']}x)")
+        for phrase_info in phrases[:phrase_limit]:
+            console.print(f"  [cyan]{name}[/cyan]: \"{phrase_info['phrase']}\" ({phrase_info['count']}x)")
 
     console.print()
 
 
-def display_group_vibe(vibe):
+def display_group_vibe(vibe, full=False):
     if not vibe or not vibe.get('description'):
         return
 
     personality = ", ".join(vibe.get('personality', [])[:4])
-    topics = ", ".join(vibe.get('topics', [])[:6])
+    # show all topics in full mode
+    topic_limit = None if full else 6
+    topics = ", ".join(vibe.get('topics', [])[:topic_limit])
 
     content = f"[bold]Energy:[/bold] {vibe.get('energy', 'unknown').upper()}\n"
     content += f"[bold]Personality:[/bold] {personality}\n"

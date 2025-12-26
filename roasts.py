@@ -154,15 +154,19 @@ def assign_personality_tags(df, stats_cache=None):
         if msg_share < 5 and msg_count > 10:
             tags.append({"tag": "lurker", "detail": f"Only {msg_share:.1f}% of messages", "icon": ""})
 
-        # timing
-        if sender in stats_cache['night_owls']:
-            night_count = stats_cache['night_owls'][sender]
-            if night_count > 20:
-                tags.append({"tag": "night_owl", "detail": f"{night_count} late night msgs", "icon": ""})
+        # timing - can only be one: night owl OR early bird, not both
+        night_count = stats_cache['night_owls'].get(sender, 0)
+        morning_count = stats_cache['early_birds'].get(sender, 0)
 
-        if sender in stats_cache['early_birds']:
-            morning_count = stats_cache['early_birds'][sender]
-            if morning_count > 10:
+        if night_count > 20 or morning_count > 10:
+            # pick the dominant one
+            if night_count > morning_count * 1.5:
+                tags.append({"tag": "night_owl", "detail": f"{night_count} late night msgs", "icon": ""})
+            elif morning_count > night_count * 1.5:
+                tags.append({"tag": "early_bird", "detail": f"{morning_count} early msgs", "icon": ""})
+            elif night_count > morning_count:
+                tags.append({"tag": "night_owl", "detail": f"{night_count} late night msgs", "icon": ""})
+            elif morning_count > 0:
                 tags.append({"tag": "early_bird", "detail": f"{morning_count} early msgs", "icon": ""})
 
         # conversation
