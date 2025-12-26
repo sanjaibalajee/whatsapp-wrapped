@@ -11,3 +11,4 @@ wheels/
 .DS_Store
 llm_context.json
 chat.txt
+out.txt
