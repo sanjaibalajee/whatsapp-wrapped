@@ -23,18 +23,15 @@ def process_chat_task(self, job_id: str):
         return {"error": "Job not found"}
 
     try:
-        # Mark as processing
+        # Mark as processing (single DB update at start)
         job.status = Job.STATUS_PROCESSING
         job.started_at = datetime.now(timezone.utc)
         job.current_step = "Starting..."
         db.session.commit()
 
-        # Progress callback
+        # Progress callback - Redis only (fast), skip DB during processing
         def update_progress(progress: int, step: str):
-            job.progress = progress
-            job.current_step = step
-            db.session.commit()
-            # Also update Redis for faster polling
+            # Only update Redis for real-time progress (skip DB round-trips)
             cache.set_job_progress(str(job_id), progress, step)
 
         update_progress(5, "Downloading file...")
@@ -48,10 +45,11 @@ def process_chat_task(self, job_id: str):
         if not is_valid:
             raise ValueError(error_msg)
 
-        # Process the chat
+        # Process the chat with selected members filter
         result = process_chat(
             file_content=file_content,
             year=job.year_filter or 2025,
+            selected_members=job.selected_members,
             progress_callback=update_progress,
         )
 

@@ -24,6 +24,10 @@ class Job(db.Model):
     progress = db.Column(db.Integer, default=0)
     current_step = db.Column(db.String(100))
 
+    # Participants (JSON arrays)
+    participants = db.Column(db.JSON)  # All participants from chat
+    selected_members = db.Column(db.JSON)  # User-selected members for analysis
+
     # File info
     original_filename = db.Column(db.String(255))
     file_key = db.Column(db.String(255))
@@ -56,6 +60,7 @@ class Job(db.Model):
 
     # Status constants
     STATUS_PENDING = "pending"
+    STATUS_AWAITING_SELECTION = "awaiting_selection"
     STATUS_PROCESSING = "processing"
     STATUS_COMPLETED = "completed"
     STATUS_FAILED = "failed"
@@ -70,6 +75,8 @@ class Job(db.Model):
             "original_filename": self.original_filename,
             "file_size": self.file_size,
             "year_filter": self.year_filter,
+            "participants": self.participants,
+            "selected_members": self.selected_members,
             "message_count": self.message_count,
             "participant_count": self.participant_count,
             "group_name": self.group_name,

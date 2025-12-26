@@ -26,6 +26,32 @@ from core.stats import (
 from core.roasts import assign_personality_tags
 
 
+def quick_parse_participants(content: str) -> tuple[list[str], str | None]:
+    """
+    Quick parse to extract participants and group name.
+    Fast operation suitable for sync execution.
+
+    Returns:
+        Tuple of (participants_list, group_name)
+    """
+    df = parse_whatsapp_content(content)
+
+    if df.empty:
+        return [], None
+
+    # Merge similar contacts
+    df = merge_similar_contacts(df)
+
+    # Detect group names (filters system senders)
+    df, group_names, current_group_name = detect_group_names(df)
+
+    # Get unique non-system senders
+    user_df = df[~df['is_system']]
+    participants = sorted(user_df['sender'].unique().tolist())
+
+    return participants, current_group_name
+
+
 def validate_whatsapp_format(content: str) -> tuple[bool, str]:
     """
     Validate if content looks like WhatsApp export
@@ -48,20 +74,33 @@ def validate_whatsapp_format(content: str) -> tuple[bool, str]:
     return True, ""
 
 
-def process_chat(file_content: str, year: int = 2025, progress_callback=None) -> dict:
+def process_chat(file_content: str, year: int = 2025, selected_members: list[str] = None, progress_callback=None) -> dict:
     """
     Process WhatsApp chat and return all stats
 
     Args:
         file_content: Raw text content of WhatsApp export
         year: Year to filter messages
+        selected_members: List of members to include in analysis (None = all)
         progress_callback: Optional callback(progress: int, step: str)
 
     Returns:
         Dictionary with all computed statistics
     """
+    import time
+    import logging
+    logger = logging.getLogger(__name__)
+
+    start_time = time.time()
+    last_time = start_time
 
     def update_progress(progress: int, step: str):
+        nonlocal last_time
+        now = time.time()
+        elapsed = (now - last_time) * 1000  # ms
+        total = (now - start_time) * 1000
+        logger.info(f"[{total:7.0f}ms] (+{elapsed:5.0f}ms) {progress:3d}% | {step}")
+        last_time = now
         if progress_callback:
             progress_callback(progress, step)
 
@@ -87,6 +126,11 @@ def process_chat(file_content: str, year: int = 2025, progress_callback=None) ->
 
     if df.empty:
         raise ValueError(f"No messages found for {year}")
+
+    # Step 4.5: Filter by selected members (if specified)
+    if selected_members:
+        update_progress(27, "Filtering to selected members...")
+        df = df[df['sender'].isin(selected_members) | df['is_system']].copy()
 
     # Pre-filter user messages
     user_df = df[~df['is_system']].copy()

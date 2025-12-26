@@ -10,9 +10,13 @@ CREATE TABLE IF NOT EXISTS jobs (
 
     -- Status tracking
     status VARCHAR(20) NOT NULL DEFAULT 'pending'
-        CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+        CHECK (status IN ('pending', 'awaiting_selection', 'processing', 'completed', 'failed')),
     progress INTEGER DEFAULT 0 CHECK (progress >= 0 AND progress <= 100),
     current_step VARCHAR(100),
+
+    -- Participants (JSON arrays)
+    participants JSONB,  -- All participants from chat
+    selected_members JSONB,  -- User-selected members for analysis
 
     -- File info
     original_filename VARCHAR(255),
