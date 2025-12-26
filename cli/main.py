@@ -6,8 +6,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from parser import parse_whatsapp, detect_group_names, merge_similar_contacts
-from stats import (
+from core.parser import parse_whatsapp, detect_group_names, merge_similar_contacts
+from core.stats import (
     get_basic_stats, get_top_chatters, get_hourly_activity, get_daily_activity,
     get_emoji_stats, get_emoji_stats_by_user, get_media_stats, get_word_stats,
     get_conversation_starters, get_night_owls, get_early_birds, get_longest_messages,
@@ -16,8 +16,8 @@ from stats import (
     get_link_sharers, get_one_worders, get_monologuers, get_laugh_stats,
     get_unique_words_per_person, get_catchphrases, get_interesting_topics, get_group_vibe
 )
-from roasts import assign_personality_tags
-from display import (
+from core.roasts import assign_personality_tags
+from .display import (
     display_header, display_basic_stats, display_group_vibe, display_top_chatters,
     display_streak_stats, display_hourly_activity, display_daily_activity,
     display_response_times, display_emoji_stats, display_media_stats, display_word_stats,

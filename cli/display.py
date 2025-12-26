@@ -6,7 +6,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich import box
 
-from roasts import generate_roast
+from core.roasts import generate_roast
 
 console = Console()
 

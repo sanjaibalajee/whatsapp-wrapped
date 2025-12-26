@@ -6,8 +6,8 @@ import numpy as np
 from datetime import timedelta
 from collections import Counter, defaultdict
 
-from constants import CHAT_STOP_WORDS, TOPIC_ONLY_STOP_WORDS
-from parser import extract_emojis
+from .constants import CHAT_STOP_WORDS, TOPIC_ONLY_STOP_WORDS
+from .parser import extract_emojis
 
 
 def format_duration(seconds):

@@ -5,74 +5,83 @@ import pandas as pd
 from datetime import datetime
 import emoji
 
-from constants import SYSTEM_PATTERNS, IGNORED_SENDERS, MEDIA_PATTERNS
+from .constants import SYSTEM_PATTERNS, IGNORED_SENDERS, MEDIA_PATTERNS
 
 
-def parse_whatsapp(file_path):
-    # regex: [DD/MM/YY, HH:MM:SS AM/PM] Sender: Content
+def _parse_lines(lines):
+    """Internal parser that works on an iterable of lines"""
     pattern = r'^\[(\d{2}/\d{2}/\d{2}),\s(\d{1,2}:\d{2}:\d{2}\s[APM]{2})\]\s([^:]+):\s(.*)$'
 
     data = []
+    current_message = None
 
-    with open(file_path, 'r', encoding='utf-8') as f:
-        current_message = None
+    for line in lines:
+        # strip ltr mark
+        line = line.replace('\u200e', '').strip()
 
-        for line in f:
-            # strip ltr mark
-            line = line.replace('\u200e', '').strip()
+        if not line:
+            continue
 
-            if not line:
-                continue
+        match = re.match(pattern, line)
 
-            match = re.match(pattern, line)
+        if match:
+            if current_message:
+                data.append(current_message)
 
-            if match:
-                if current_message:
-                    data.append(current_message)
+            date_str, time_str, sender, content = match.groups()
 
-                date_str, time_str, sender, content = match.groups()
+            msg_date = datetime.strptime(date_str, '%d/%m/%y')
+            msg_time = datetime.strptime(time_str, '%I:%M:%S %p')
 
-                msg_date = datetime.strptime(date_str, '%d/%m/%y')
-                msg_time = datetime.strptime(time_str, '%I:%M:%S %p')
+            full_datetime = msg_date.replace(
+                hour=msg_time.hour,
+                minute=msg_time.minute,
+                second=msg_time.second
+            )
 
-                full_datetime = msg_date.replace(
-                    hour=msg_time.hour,
-                    minute=msg_time.minute,
-                    second=msg_time.second
-                )
+            is_system = any(p in content for p in SYSTEM_PATTERNS) or sender.strip() in IGNORED_SENDERS
 
-                is_system = any(p in content for p in SYSTEM_PATTERNS) or sender.strip() in IGNORED_SENDERS
+            media_type = None
+            for media, pattern_text in MEDIA_PATTERNS.items():
+                if pattern_text in content:
+                    media_type = media
+                    break
 
-                media_type = None
-                for media, pattern_text in MEDIA_PATTERNS.items():
-                    if pattern_text in content:
-                        media_type = media
-                        break
+            current_message = {
+                "datetime": full_datetime,
+                "date": msg_date.date(),
+                "time": msg_time.time(),
+                "hour": msg_time.hour,
+                "day_of_week": msg_date.strftime('%A'),
+                "sender": sender.strip(),
+                "message": content,
+                "is_system": is_system,
+                "media_type": media_type,
+                "word_count": len(content.split()) if not is_system and not media_type else 0,
+                "char_count": len(content) if not is_system and not media_type else 0,
+            }
+        else:
+            # multiline continuation
+            if current_message:
+                current_message["message"] += "\n" + line
+                current_message["word_count"] += len(line.split())
+                current_message["char_count"] += len(line)
 
-                current_message = {
-                    "datetime": full_datetime,
-                    "date": msg_date.date(),
-                    "time": msg_time.time(),
-                    "hour": msg_time.hour,
-                    "day_of_week": msg_date.strftime('%A'),
-                    "sender": sender.strip(),
-                    "message": content,
-                    "is_system": is_system,
-                    "media_type": media_type,
-                    "word_count": len(content.split()) if not is_system and not media_type else 0,
-                    "char_count": len(content) if not is_system and not media_type else 0,
-                }
-            else:
-                # multiline continuation
-                if current_message:
-                    current_message["message"] += "\n" + line
-                    current_message["word_count"] += len(line.split())
-                    current_message["char_count"] += len(line)
-
-        if current_message:
-            data.append(current_message)
+    if current_message:
+        data.append(current_message)
 
     return pd.DataFrame(data)
+
+
+def parse_whatsapp(file_path):
+    """Parse WhatsApp export from file path (for CLI)"""
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return _parse_lines(f)
+
+
+def parse_whatsapp_content(content: str):
+    """Parse WhatsApp export from string content (for API)"""
+    return _parse_lines(content.split('\n'))
 
 
 def detect_group_names(df):

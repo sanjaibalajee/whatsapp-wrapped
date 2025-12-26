@@ -8,7 +8,16 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment files (contain secrets!)
+.env
+*.env.local
+
+# OS/IDE
 .DS_Store
+
+# Generated files
 llm_context.json
 chat.txt
 out.txt
+out.json

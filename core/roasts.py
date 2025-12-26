@@ -2,7 +2,7 @@
 
 import random
 
-from stats import (
+from .stats import (
     get_double_texters, get_conversation_killers, get_response_times,
     get_caps_users, get_question_askers, get_link_sharers, get_one_worders,
     get_night_owls, get_early_birds, get_monologuers, get_laugh_stats,
