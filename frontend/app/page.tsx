@@ -1,25 +1,68 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Dithering } from "@paper-design/shaders-react";
+import { uploadChat } from "./actions";
+import { hasValidCache } from "./lib/cache";
 
 export default function Home() {
   const router = useRouter();
   const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [checkingCache, setCheckingCache] = useState(true);
+
+  // Check for cached data on mount
+  useEffect(() => {
+    if (hasValidCache()) {
+      router.replace("/wrapped");
+    } else {
+      setCheckingCache(false);
+    }
+  }, [router]);
+
+  // Show nothing while checking cache to prevent flash
+  if (checkingCache) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
+        <div className="w-8 h-8 border-2 border-[#25D366] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFileName(file.name);
-      // Store file name in localStorage
-      localStorage.setItem("wrappedFileName", file.name);
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setFileName(selectedFile.name);
+      setFile(selectedFile);
+      setError(null);
     }
   };
 
   const handleContinue = () => {
-    router.push("/select");
+    if (!file) return;
+
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("year", "2025");
+
+        const response = await uploadChat(formData);
+
+        if (response.status === "awaiting_selection") {
+          // Store job data in localStorage
+          localStorage.setItem("wrappedJobId", response.job_id);
+          localStorage.setItem("wrappedParticipants", JSON.stringify(response.participants));
+          router.push("/select");
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Upload failed");
+      }
+    });
   };
 
   return (
@@ -77,6 +120,7 @@ export default function Home() {
                 accept=".txt"
                 onChange={handleFileUpload}
                 className="hidden"
+                disabled={isPending}
               />
               {fileName ? (
                 <div className="flex items-center justify-center gap-3">
@@ -128,16 +172,30 @@ export default function Home() {
             </div>
           </label>
 
+          {error && (
+            <p className="text-red-400 text-sm">{error}</p>
+          )}
+
           <button
             onClick={handleContinue}
-            disabled={!fileName}
-            className={`w-full py-3.5 rounded-xl font-semibold transition-all ${
-              fileName
+            disabled={!fileName || isPending}
+            className={`w-full py-3.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+              fileName && !isPending
                 ? "bg-[#25D366] text-white hover:bg-[#128C7E]"
                 : "bg-[#2a2a2a] text-zinc-500 cursor-not-allowed"
             }`}
           >
-            See Your Wrapped
+            {isPending ? (
+              <>
+                <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>Uploading...</span>
+              </>
+            ) : (
+              "See Your Wrapped"
+            )}
           </button>
         </div>
 
