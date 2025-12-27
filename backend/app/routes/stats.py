@@ -2,6 +2,7 @@
 Stats retrieval routes
 """
 
+from datetime import datetime, timezone
 from flask import Blueprint, current_app
 from ..extensions import limiter
 from ..models import Job
@@ -10,6 +11,13 @@ from ..services.cache import cache
 from ..utils.security import validate_uuid
 
 stats_bp = Blueprint("stats", __name__)
+
+
+def is_job_expired(job: Job) -> bool:
+    """Check if job has expired"""
+    if job.expires_at is None:
+        return False
+    return job.expires_at < datetime.now(timezone.utc)
 
 
 @stats_bp.route("/jobs/<job_id>", methods=["GET"])
@@ -44,7 +52,7 @@ def get_job_status(job_id: str):
 
     # Fall back to database
     job = Job.query.get(job_id)
-    if not job:
+    if not job or is_job_expired(job):
         return {"error": "Job not found"}, 404
 
     status = job.to_status_dict()
@@ -77,7 +85,7 @@ def get_job_stats(job_id: str):
 
     # Get job
     job = Job.query.get(job_id)
-    if not job:
+    if not job or is_job_expired(job):
         return {"error": "Job not found"}, 404
 
     if job.status == Job.STATUS_PENDING:
@@ -175,7 +183,7 @@ def get_job_stats_section(job_id: str, section: str):
 
     # Get job
     job = Job.query.get(job_id)
-    if not job:
+    if not job or is_job_expired(job):
         return {"error": "Job not found"}, 404
 
     if job.status != Job.STATUS_COMPLETED:
