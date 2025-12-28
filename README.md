@@ -45,6 +45,8 @@ upload a whatsapp chat export → select members → get stats like:
                            ← { stats: {...} }
 ```
 
+**privacy:** uploaded files are deleted immediately after analysis completes.
+
 ## stack
 
 | layer | tech |
@@ -80,6 +82,27 @@ cd backend && uv run celery -A celery_worker.celery worker --loglevel=info
 
 # run frontend
 cd frontend && npm run dev
+```
+
+## cli
+
+run analysis locally without the web interface:
+
+```bash
+# basic usage - analyzes chat.txt for 2025
+uv run python -m cli chat.txt
+
+# specify a different year
+uv run python -m cli chat.txt --year 2024
+
+# full output (more words, catchphrases, etc)
+uv run python -m cli chat.txt --full
+
+# export llm context (saves to llm_context.json)
+uv run python -m cli chat.txt --llm-context
+
+# combine flags
+uv run python -m cli path/to/chat.txt --year 2024 --full --llm-context
 ```
 
 ## env vars
