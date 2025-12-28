@@ -1074,10 +1074,6 @@ export default function WrappedPage() {
     router.push("/");
   };
 
-  const handleClose = () => {
-    router.push("/");
-  };
-
   if (loading) {
     return (
       <div className="h-screen w-screen bg-[#0a0a0a] flex items-center justify-center">
@@ -1210,29 +1206,6 @@ export default function WrappedPage() {
             </div>
           ))}
         </div>
-
-        {/* Close Button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleClose();
-          }}
-          className="absolute top-10 right-4 w-8 h-8 flex items-center justify-center z-10 text-white/50 hover:text-white transition-all"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
 
         {/* Content */}
         <div className="absolute inset-0 z-10 pt-16 pb-16" key={currentStory}>
