@@ -55,11 +55,18 @@ def validate_whatsapp_format(content: str) -> tuple[bool, str]:
     if not content or len(content.strip()) == 0:
         return False, "File is empty"
 
-    # Check for WhatsApp message pattern
-    pattern = r'\[\d{2}/\d{2}/\d{2},\s\d{1,2}:\d{2}:\d{2}\s[APM]{2}\]'
-    matches = re.findall(pattern, content[:5000])  # Check first 5KB
+    # Check for WhatsApp message pattern (support multiple formats)
+    patterns = [
+        r'\[\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}(?::\d{2})?\s?(?:[APap][Mm])?\]',  # Bracketed
+        r'\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}(?::\d{2})?\s?(?:[APap][Mm])?\s?[-–]',  # Non-bracketed
+    ]
 
-    if len(matches) < 3:
+    total_matches = 0
+    for pattern in patterns:
+        matches = re.findall(pattern, content[:5000])
+        total_matches += len(matches)
+
+    if total_matches < 3:
         return False, "File doesn't appear to be a WhatsApp export"
 
     return True, ""

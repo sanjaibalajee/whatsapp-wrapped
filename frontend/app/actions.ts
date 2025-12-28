@@ -44,7 +44,8 @@ export async function uploadChat(formData: FormData): Promise<UploadResponse> {
   });
 
   if (!response.ok) {
-    throw new Error(`Upload failed: ${response.statusText}`);
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Upload failed: ${response.statusText}`);
   }
 
   return response.json();

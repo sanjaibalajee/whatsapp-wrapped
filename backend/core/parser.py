@@ -8,9 +8,51 @@ import emoji
 from .constants import SYSTEM_PATTERNS, IGNORED_SENDERS, MEDIA_PATTERNS
 
 
+def _parse_datetime(date_str, time_str):
+    """Parse date and time strings in various WhatsApp formats"""
+    # Date formats to try
+    date_formats = ['%d/%m/%y', '%m/%d/%y', '%d/%m/%Y', '%m/%d/%Y']
+    # Time formats to try
+    time_formats = ['%I:%M:%S %p', '%I:%M %p', '%H:%M:%S', '%H:%M']
+
+    msg_date = None
+    for fmt in date_formats:
+        try:
+            msg_date = datetime.strptime(date_str, fmt)
+            break
+        except ValueError:
+            continue
+
+    if msg_date is None:
+        return None, None
+
+    msg_time = None
+    for fmt in time_formats:
+        try:
+            msg_time = datetime.strptime(time_str.strip(), fmt)
+            break
+        except ValueError:
+            continue
+
+    if msg_time is None:
+        return None, None
+
+    return msg_date, msg_time
+
+
 def _parse_lines(lines):
     """Internal parser that works on an iterable of lines"""
-    pattern = r'^\[(\d{2}/\d{2}/\d{2}),\s(\d{1,2}:\d{2}:\d{2}\s[APM]{2})\]\s([^:]+):\s(.*)$'
+    # Multiple patterns to handle different WhatsApp export formats
+    patterns = [
+        # [DD/MM/YY, H:MM:SS AM/PM] Sender: Message (iOS format)
+        r'^\[(\d{1,2}/\d{1,2}/\d{2,4}),\s(\d{1,2}:\d{2}(?::\d{2})?\s?[APap][Mm])\]\s([^:]+):\s(.*)$',
+        # [DD/MM/YY, HH:MM:SS] Sender: Message (24-hour format)
+        r'^\[(\d{1,2}/\d{1,2}/\d{2,4}),\s(\d{1,2}:\d{2}(?::\d{2})?)\]\s([^:]+):\s(.*)$',
+        # DD/MM/YY, H:MM AM/PM - Sender: Message (Android format without brackets)
+        r'^(\d{1,2}/\d{1,2}/\d{2,4}),\s(\d{1,2}:\d{2}(?::\d{2})?\s?[APap][Mm])\s[-–]\s([^:]+):\s(.*)$',
+        # DD/MM/YY, HH:MM - Sender: Message (Android 24-hour without brackets)
+        r'^(\d{1,2}/\d{1,2}/\d{2,4}),\s(\d{1,2}:\d{2}(?::\d{2})?)\s[-–]\s([^:]+):\s(.*)$',
+    ]
 
     data = []
     current_message = None
@@ -22,7 +64,11 @@ def _parse_lines(lines):
         if not line:
             continue
 
-        match = re.match(pattern, line)
+        match = None
+        for pattern in patterns:
+            match = re.match(pattern, line)
+            if match:
+                break
 
         if match:
             if current_message:
@@ -30,8 +76,14 @@ def _parse_lines(lines):
 
             date_str, time_str, sender, content = match.groups()
 
-            msg_date = datetime.strptime(date_str, '%d/%m/%y')
-            msg_time = datetime.strptime(time_str, '%I:%M:%S %p')
+            msg_date, msg_time = _parse_datetime(date_str, time_str)
+            if msg_date is None or msg_time is None:
+                # Couldn't parse, treat as continuation
+                if current_message:
+                    current_message["message"] += "\n" + line
+                    current_message["word_count"] += len(line.split())
+                    current_message["char_count"] += len(line)
+                continue
 
             full_datetime = msg_date.replace(
                 hour=msg_time.hour,

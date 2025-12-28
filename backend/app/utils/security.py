@@ -73,15 +73,39 @@ def validate_file_upload(file: FileStorage) -> tuple[bool, str]:
         content = file.read(5000).decode('utf-8')
         file.seek(0)
 
-        pattern = r'\[\d{2}/\d{2}/\d{2},\s\d{1,2}:\d{2}:\d{2}\s[APM]{2}\]'
-        matches = re.findall(pattern, content)
+        # Log first few lines for debugging
+        first_lines = content[:500].split('\n')[:5]
+        current_app.logger.info(f"Upload validation - First lines preview: {first_lines}")
 
-        if len(matches) < 2:
-            return False, "File doesn't appear to be a WhatsApp chat export"
+        # Support multiple WhatsApp timestamp formats:
+        # [28/12/25, 5:30:00 PM] - US 12-hour with seconds
+        # [28/12/25, 5:30 PM] - US 12-hour without seconds
+        # [28/12/2025, 17:30:00] - 24-hour with 4-digit year
+        # [12/28/25, 5:30:00 PM] - MM/DD/YY format
+        # 28/12/25, 5:30 PM - Without brackets (some Android exports)
+        patterns = [
+            r'\[\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}(?::\d{2})?\s?(?:[APap][Mm])?\]',  # Bracketed formats
+            r'\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}(?::\d{2})?\s?(?:[APap][Mm])?\s?[-–]',  # Non-bracketed with dash
+        ]
 
-    except UnicodeDecodeError:
+        total_matches = 0
+        pattern_matches = {}
+        for pattern in patterns:
+            matches = re.findall(pattern, content)
+            pattern_matches[pattern[:30]] = len(matches)
+            total_matches += len(matches)
+
+        current_app.logger.info(f"Upload validation - Pattern matches: {pattern_matches}, total: {total_matches}")
+
+        if total_matches < 2:
+            current_app.logger.warning(f"Upload rejected - Not enough WhatsApp patterns found. Total matches: {total_matches}")
+            return False, "File doesn't appear to be a WhatsApp chat export. Please ensure you're uploading a .txt file exported directly from WhatsApp."
+
+    except UnicodeDecodeError as e:
+        current_app.logger.warning(f"Upload rejected - UTF-8 decode error: {e}")
         return False, "File is not valid UTF-8 text"
     except Exception as e:
+        current_app.logger.error(f"Upload validation error: {e}")
         return False, f"Error reading file: {str(e)}"
 
     return True, ""

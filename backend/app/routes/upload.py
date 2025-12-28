@@ -33,15 +33,20 @@ def upload_chat():
             "group_name": "Group Name"
         }
     """
+    current_app.logger.info(f"Upload request received from {request.remote_addr}")
+
     # Check for file
     if "file" not in request.files:
+        current_app.logger.warning("Upload rejected - No file in request")
         return {"error": "No file provided"}, 400
 
     file = request.files["file"]
+    current_app.logger.info(f"File received: {file.filename}, content_type: {file.content_type}")
 
     # Validate file
     is_valid, error_msg = validate_file_upload(file)
     if not is_valid:
+        current_app.logger.warning(f"Upload rejected - Validation failed: {error_msg}")
         return {"error": error_msg}, 400
 
     # Validate year
@@ -60,8 +65,10 @@ def upload_chat():
 
         # Quick parse to get participants (sync - fast operation)
         participants, group_name = quick_parse_participants(file_content)
+        current_app.logger.info(f"Parsed {len(participants)} participants, group: {group_name}")
 
         if not participants:
+            current_app.logger.warning("Upload rejected - No participants found after parsing")
             return {"error": "No participants found in chat"}, 400
 
         # Upload file to R2
@@ -85,6 +92,8 @@ def upload_chat():
         # Cache initial status
         cache.set_job_status(str(job.id), job.to_status_dict())
 
+        current_app.logger.info(f"Upload successful - Job {job.id} created with {len(participants)} participants")
+
         return {
             "job_id": str(job.id),
             "status": job.status,
@@ -93,7 +102,7 @@ def upload_chat():
         }, 200
 
     except Exception as e:
-        current_app.logger.error(f"Upload error: {e}")
+        current_app.logger.error(f"Upload error: {e}", exc_info=True)
         return {"error": "Failed to process upload"}, 500
 
 

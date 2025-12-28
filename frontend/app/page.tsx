@@ -36,6 +36,15 @@ export default function Home() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      const maxSize = 20 * 1024 * 1024; // 20MB
+      if (selectedFile.size > maxSize) {
+        setError("File size exceeds 20MB limit");
+        return;
+      }
+      if (!selectedFile.name.endsWith(".txt")) {
+        setError("Only .txt files are allowed");
+        return;
+      }
       setFileName(selectedFile.name);
       setFile(selectedFile);
       setError(null);
@@ -165,7 +174,7 @@ export default function Home() {
                     <p className="text-zinc-200 font-medium text-sm">
                       Upload chat export
                     </p>
-                    <p className="text-zinc-500 text-xs">.txt file</p>
+                    <p className="text-zinc-500 text-xs">.txt file only (max 20MB)</p>
                   </div>
                 </div>
               )}
