@@ -1,17 +1,42 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Dithering } from "@paper-design/shaders-react";
-import { uploadChat } from "./actions";
+import type { UploadResponse, ActionResult } from "./actions";
 import { hasValidCache } from "./lib/cache";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
+
+async function uploadChat(file: File, year: string): Promise<ActionResult<UploadResponse>> {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("year", year);
+
+    const response = await fetch(`${API_BASE}/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return { success: false, error: errorData.error || `Upload failed: ${response.statusText}` };
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Upload failed" };
+  }
+}
 
 export default function Home() {
   const router = useRouter();
   const [fileName, setFileName] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkingCache, setCheckingCache] = useState(true);
 
@@ -51,28 +76,27 @@ export default function Home() {
     }
   };
 
-  const handleContinue = () => {
-    if (!file) return;
+  const handleContinue = async () => {
+    if (!file || isUploading) return;
 
-    startTransition(async () => {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("year", "2025");
+    setIsUploading(true);
+    setError(null);
 
-      const result = await uploadChat(formData);
+    const result = await uploadChat(file, "2025");
 
-      if (!result.success) {
-        setError(result.error);
-        return;
-      }
+    if (!result.success) {
+      setError(result.error);
+      setIsUploading(false);
+      return;
+    }
 
-      if (result.data.status === "awaiting_selection") {
-        // Store job data in localStorage
-        localStorage.setItem("wrappedJobId", result.data.job_id);
-        localStorage.setItem("wrappedParticipants", JSON.stringify(result.data.participants));
-        router.push("/select");
-      }
-    });
+    if (result.data.status === "awaiting_selection") {
+      // Store job data in localStorage
+      localStorage.setItem("wrappedJobId", result.data.job_id);
+      localStorage.setItem("wrappedParticipants", JSON.stringify(result.data.participants));
+      router.push("/select");
+    }
+    setIsUploading(false);
   };
 
   return (
@@ -130,7 +154,7 @@ export default function Home() {
                 accept=".txt"
                 onChange={handleFileUpload}
                 className="hidden"
-                disabled={isPending}
+                disabled={isUploading}
               />
               {fileName ? (
                 <div className="flex items-center justify-center gap-3">
@@ -188,14 +212,14 @@ export default function Home() {
 
           <button
             onClick={handleContinue}
-            disabled={!fileName || isPending}
+            disabled={!fileName || isUploading}
             className={`w-full py-3.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-              fileName && !isPending
+              fileName && !isUploading
                 ? "bg-[#25D366] text-white hover:bg-[#128C7E]"
                 : "bg-[#2a2a2a] text-zinc-500 cursor-not-allowed"
             }`}
           >
-            {isPending ? (
+            {isUploading ? (
               <>
                 <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
