@@ -27,7 +27,8 @@ from .display import (
     display_response_times, display_emoji_stats, display_media_stats, display_word_stats,
     display_unique_words, display_catchphrases, display_special_stats,
     display_double_texters, display_conversation_killers, display_busiest_dates,
-    display_response_pairs, display_personality_tags, display_roasts, display_llm_context
+    display_response_pairs, display_personality_tags, display_roasts, display_llm_context,
+    display_ai_roasts
 )
 
 console = Console()
@@ -125,7 +126,7 @@ def prepare_llm_context(df, user_df=None, max_sample_messages=50):
     return context, personality_tags, unique_words, catchphrases, group_vibe
 
 
-def run_wrapped(file_path, show_llm_context=False, year=2025, full=False):
+def run_wrapped(file_path, show_llm_context=False, year=2025, full=False, ai_roast=False):
     console.print(f"\n[dim]Loading chat from {file_path}...[/dim]\n")
 
     try:
@@ -252,6 +253,66 @@ def run_wrapped(file_path, show_llm_context=False, year=2025, full=False):
     display_personality_tags(personality_tags)
     display_roasts(personality_tags, unique_words, catchphrases)
 
+    # AI-powered roasts (optional)
+    if ai_roast:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            transient=True
+        ) as progress:
+            progress.add_task("Generating AI roasts...", total=None)
+
+            try:
+                from core.ai import generate_roasts
+
+                # get topics and sample messages for AI context
+                topics = get_interesting_topics(df, user_df)[:15]
+
+                # sample messages for AI
+                sample_messages = {}
+                text_df = user_df[(user_df['media_type'].isna()) & (user_df['char_count'] > 10)]
+                for sender in list(top_chatters.keys())[:10]:
+                    sender_msgs = text_df[text_df['sender'] == sender]
+                    if not sender_msgs.empty:
+                        sampled = sender_msgs.sample(n=min(5, len(sender_msgs)))
+                        sample_messages[sender] = sampled['message'].tolist()
+
+                # peak hour
+                peak_hour = max(hourly, key=hourly.get) if hourly else 12
+
+                ai_roast_result = generate_roasts(
+                    group_name=current_group_name or "Group Chat",
+                    year=year,
+                    total_messages=basic_stats["total_messages"],
+                    total_participants=len(top_chatters),
+                    peak_hour=peak_hour,
+                    topics=topics,
+                    top_words=list(words.keys())[:20] if words else [],
+                    top_chatters=top_chatters,
+                    signature_words=unique_words,
+                    personality_tags=personality_tags,
+                    user_emojis=user_emojis,
+                    night_owls=night_owls,
+                    early_birds=early_birds,
+                    double_texters=double_texters,
+                    response_times=response_times,
+                    caps_users=stats_cache['caps_users'],
+                    question_askers=stats_cache['question_askers'],
+                    one_worders=stats_cache['one_worders'],
+                    sample_messages=sample_messages,
+                )
+
+                display_ai_roasts(ai_roast_result)
+
+            except ImportError:
+                console.print("[red]Error: AI roasts require the backend app module[/red]")
+            except ValueError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                console.print("[dim]Make sure OPENAI_API_KEY environment variable is set[/dim]")
+            except Exception as e:
+                console.print(f"[red]AI roast generation failed: {e}[/red]")
+
     # llm context for future ai stuff
     if show_llm_context:
         llm_context, _, _, _, _ = prepare_llm_context(df, user_df)
@@ -273,6 +334,7 @@ if __name__ == "__main__":
     file_path = "chat.txt"
     show_llm = False
     full_output = False
+    use_ai_roast = False
     target_year = 2025  # default to current wrapped year
 
     for i, arg in enumerate(sys.argv[1:]):
@@ -280,6 +342,8 @@ if __name__ == "__main__":
             show_llm = True
         elif arg == "--full":
             full_output = True
+        elif arg == "--ai-roast":
+            use_ai_roast = True
         elif arg == "--year" and i + 2 < len(sys.argv):
             target_year = int(sys.argv[i + 2])
         elif arg.isdigit() and sys.argv[i] == "--year":
@@ -287,4 +351,4 @@ if __name__ == "__main__":
         elif not arg.startswith("-"):
             file_path = arg
 
-    run_wrapped(file_path, show_llm_context=show_llm, year=target_year, full=full_output)
+    run_wrapped(file_path, show_llm_context=show_llm, year=target_year, full=full_output, ai_roast=use_ai_roast)

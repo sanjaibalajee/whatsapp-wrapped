@@ -92,17 +92,27 @@ run analysis locally without the web interface:
 uv run python -m cli chat.txt
 
 # specify a different year
-uv run python -m cli chat.txt --year 2024
+uv run python -m cli chat.txt --year 2025
 
 # full output (more words, catchphrases, etc)
 uv run python -m cli chat.txt --full
+
+# ai-powered roasts (requires OPENAI_API_KEY)
+uv run python -m cli chat.txt --ai-roast
 
 # export llm context (saves to llm_context.json)
 uv run python -m cli chat.txt --llm-context
 
 # combine flags
-uv run python -m cli path/to/chat.txt --year 2024 --full --llm-context
+uv run python -m cli path/to/chat.txt --year 2025 --full --ai-roast
 ```
+
+| flag | description |
+|------|-------------|
+| `--year YYYY` | filter to specific year (default: 2025) |
+| `--full` | extended output with more stats |
+| `--ai-roast` | ai-generated roasts via openai (needs OPENAI_API_KEY) |
+| `--llm-context` | export context to llm_context.json |
 
 ## env vars
 
@@ -114,6 +124,7 @@ R2_ACCOUNT_ID=...
 R2_ACCESS_KEY_ID=...
 R2_SECRET_ACCESS_KEY=...
 R2_BUCKET_NAME=whatsapp-wrapped
+OPENAI_API_KEY=sk-...  # for ai roasts
 ```
 
 ## api

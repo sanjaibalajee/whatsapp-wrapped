@@ -14,7 +14,7 @@ from core.stats import (
     get_unique_words_per_person, get_catchphrases, get_interesting_topics, get_group_vibe
 )
 from core.roasts import assign_personality_tags
-from .ai import generate_roasts
+from core.ai import generate_roasts
 
 
 def quick_parse_participants(content: str) -> tuple[list[str], str | None]:

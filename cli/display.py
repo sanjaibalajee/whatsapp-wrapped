@@ -458,3 +458,45 @@ def display_llm_context(context):
     console.print(f"[dim]Participants: {len(context.get('person_profiles', {}))}[/dim]")
     console.print(f"[dim]Sample messages: {len(context.get('sample_messages', []))}[/dim]")
     console.print()
+
+
+def display_ai_roasts(ai_roast_result):
+    """Display AI-generated roasts from OpenAI"""
+    if not ai_roast_result:
+        return
+
+    brainrot_score = ai_roast_result.get("brainrot_score", 0)
+    group_roast = ai_roast_result.get("group_roast", "")
+    individual_roasts = ai_roast_result.get("individual_roasts", {})
+
+    # brainrot score with visual bar
+    bar_filled = "█" * (brainrot_score // 10)
+    bar_empty = "░" * (10 - brainrot_score // 10)
+    score_color = "green" if brainrot_score < 40 else "yellow" if brainrot_score < 70 else "red"
+
+    console.print(Panel(
+        f"[bold {score_color}]Brainrot Score: {brainrot_score}/100[/bold {score_color}]\n"
+        f"[{score_color}]{bar_filled}{bar_empty}[/{score_color}]",
+        title="🧠 AI Analysis",
+        border_style=score_color
+    ))
+    console.print()
+
+    # group roast
+    if group_roast:
+        console.print(Panel(
+            f"[italic]{group_roast}[/italic]",
+            title="Group Roast",
+            border_style="magenta"
+        ))
+        console.print()
+
+    # individual roasts
+    if individual_roasts:
+        console.print(Panel("[bold red]AI Individual Roasts[/bold red]", border_style="red"))
+
+        for person, roast in individual_roasts.items():
+            name = person.split()[0] if person else person
+            console.print(f"  [bold cyan]{name}:[/bold cyan] [yellow]{roast}[/yellow]")
+
+        console.print()
