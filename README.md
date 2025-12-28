@@ -66,7 +66,6 @@ the backend processes a 150kb chat (~2k messages) in under 1 second. total api r
 
 the two-step flow (upload → select members → analyze) lets users filter who appears in their wrapped before burning compute cycles. file validation ensures only whatsapp exports get through.
 
-cleanup is handled via r2 lifecycle rules (auto-delete after 7 days) and redis ttls. no celery beat needed.
 
 ## local dev
 
