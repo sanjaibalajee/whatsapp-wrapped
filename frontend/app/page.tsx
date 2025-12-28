@@ -55,21 +55,22 @@ export default function Home() {
     if (!file) return;
 
     startTransition(async () => {
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("year", "2025");
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("year", "2025");
 
-        const response = await uploadChat(formData);
+      const result = await uploadChat(formData);
 
-        if (response.status === "awaiting_selection") {
-          // Store job data in localStorage
-          localStorage.setItem("wrappedJobId", response.job_id);
-          localStorage.setItem("wrappedParticipants", JSON.stringify(response.participants));
-          router.push("/select");
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Upload failed");
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      if (result.data.status === "awaiting_selection") {
+        // Store job data in localStorage
+        localStorage.setItem("wrappedJobId", result.data.job_id);
+        localStorage.setItem("wrappedParticipants", JSON.stringify(result.data.participants));
+        router.push("/select");
       }
     });
   };

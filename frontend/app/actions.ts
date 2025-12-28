@@ -30,25 +30,32 @@ export interface StatsResponse {
   status: string;
 }
 
-export async function uploadChat(formData: FormData): Promise<UploadResponse> {
-  const file = formData.get("file") as File;
-  const year = formData.get("year") as string;
+export type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
 
-  const uploadFormData = new FormData();
-  uploadFormData.append("file", file);
-  uploadFormData.append("year", year || "2025");
+export async function uploadChat(formData: FormData): Promise<ActionResult<UploadResponse>> {
+  try {
+    const file = formData.get("file") as File;
+    const year = formData.get("year") as string;
 
-  const response = await fetch(`${API_BASE}/upload`, {
-    method: "POST",
-    body: uploadFormData,
-  });
+    const uploadFormData = new FormData();
+    uploadFormData.append("file", file);
+    uploadFormData.append("year", year || "2025");
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Upload failed: ${response.statusText}`);
+    const response = await fetch(`${API_BASE}/upload`, {
+      method: "POST",
+      body: uploadFormData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return { success: false, error: errorData.error || `Upload failed: ${response.statusText}` };
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Upload failed" };
   }
-
-  return response.json();
 }
 
 export async function startAnalysis(
