@@ -34,6 +34,11 @@ def create_app(config_class=None):
     # Register error handlers
     register_error_handlers(app)
 
+    # Root route
+    @app.route("/")
+    def index():
+        return "hi there!"
+
     return app
 
 

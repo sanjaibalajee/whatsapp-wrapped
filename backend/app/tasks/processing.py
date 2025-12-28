@@ -34,7 +34,7 @@ def process_chat_task(self, job_id: str):
             # Only update Redis for real-time progress (skip DB round-trips)
             cache.set_job_progress(str(job_id), progress, step)
 
-        update_progress(5, "Downloading file...")
+        update_progress(5, "Validating file...")
 
         # Download file from R2
         file_content = storage.download_file(job.file_key)

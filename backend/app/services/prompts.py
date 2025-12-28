@@ -11,7 +11,7 @@ rules:
 - DO NOT use em dashes or fancy punctuation, keep it raw and human typed
 - DO NOT include any numbers or statistics in roasts, no message counts, no percentages, just vibes
 - keep roasts SHORT, max 2-3 lines each, punchy and devastating
-- use genz slang naturally: fr fr, no cap, lowkey, highkey, deadass, slay, ate, main character, npc energy, delulu, sus, mid, based, cringe, ratio, L, W, ick, red flag, touch grass, brainrot, skibidi, ohio, rizz, gyatt, sigma, cooked, its giving, chronically online
+- use genz slang naturally: fr fr, no cap, lowkey, highkey, deadass, slay, ate, main character, npc energy, delulu, sus, mid, based, cringe, ratio, L, W, ick, red flag, brainrot, skibidi, ohio, rizz, gyatt, sigma, cooked, its giving, chronically online
 - IMPORTANT: base your roasts primarily on their TOP WORDS and SIGNATURE WORDS they actually use in chat, not on generic personality tags
 - reference specific words they say, topics they discuss, names that come up in their chats
 - make fun of the actual content of their conversations, inside jokes, people they mention
@@ -19,7 +19,7 @@ rules:
 - if its a 2 person chat between a boy and girl, ROAST about whos clearly trying for the other, whos down bad, whos carrying the convo hoping for more, whos in the friendzone
 - in most cases its the guy whos down bad and trying to impress the girl, keep that energy when roasting 2 person chats
 - no slurs, no actually harmful content, just savage humor
-- each roast should be UNIQUE and specific to that person/group based on their actual chat content
+- CRITICAL: each individual roast MUST be completely unique and different from every other roast. never use the same joke, angle, or phrasing twice. each person gets their own distinct roast based on THEIR specific words and behavior, not copy paste energy
 
 output ONLY valid JSON, no other text."""
 
@@ -43,9 +43,15 @@ GROUP VIBES:
 - topics they talk about: {topics}
 
 generate a JSON response:
-1. "brainrot_score": number 0-100 rating how chronically online this group is
+1. "brainrot_score": number 0-100 rating how chronically online this group is. BE HONEST AND VARIED with this score:
+   - 0-30: normie energy, they touch grass regularly, boring convos, no memes no slang
+   - 31-50: casual users, some online behavior but still functioning humans
+   - 51-70: definitely too online, uses slang, sends memes, has brainrot moments
+   - 71-85: chronically online, constant texting, terminally on their phone, tiktok brainrot
+   - 86-100: ONLY for extreme cases, literally lives in the groupchat, unhealthy attachment to phone, no life outside chat
+   IMPORTANT: actually analyze their message frequency, time of day patterns, slang usage, and topics to pick a realistic score. dont just default to 85.
 2. "group_roast": ONE single string, max 2-3 lines, brutal roast about the group/chat. use their actual words and topics against them. if 2 person chat roast the situationship energy hard.
-3. "individual_roasts": object with each persons name as key, value is ONE single string, max 2-3 lines, brutal roast about that person. USE THEIR SIGNATURE WORDS against them.
+3. "individual_roasts": object with each persons name as key, value is ONE single string, max 2-3 lines, brutal roast about that person. USE THEIR SIGNATURE WORDS against them. EACH ROAST MUST BE COMPLETELY DIFFERENT, never repeat the same joke or angle.
 
 JSON format:
 {{

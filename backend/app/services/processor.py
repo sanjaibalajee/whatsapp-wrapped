@@ -199,7 +199,7 @@ def process_chat(file_content: str, year: int = 2025, selected_members: list[str
     topics = get_interesting_topics(df, user_df)
 
     # Step 12: Generate AI roasts
-    update_progress(92, "Generating AI roasts...")
+    update_progress(92, "Judging your year...")
     peak_hour_for_ai = max(hourly.items(), key=lambda x: x[1])[0] if hourly else None
     top_words_for_ai = list(words.items())[:30] if words else []
 
