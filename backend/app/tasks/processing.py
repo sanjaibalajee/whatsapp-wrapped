@@ -78,6 +78,15 @@ def process_chat_task(self, job_id: str):
         # Update status cache
         cache.set_job_status(str(job_id), job.to_status_dict())
 
+        # Delete the uploaded file immediately after job completes
+        if job.file_key:
+            try:
+                storage.delete_file(job.file_key)
+                job.file_key = None
+                db.session.commit()
+            except Exception as delete_error:
+                print(f"Warning: Failed to delete uploaded file {job.file_key}: {delete_error}")
+
         return {"status": "completed", "job_id": str(job_id)}
 
     except Exception as e:
@@ -89,6 +98,15 @@ def process_chat_task(self, job_id: str):
 
         # Update status cache
         cache.set_job_status(str(job_id), job.to_status_dict())
+
+        # Delete the uploaded file on failure (no retries left)
+        if self.request.retries >= self.max_retries and job.file_key:
+            try:
+                storage.delete_file(job.file_key)
+                job.file_key = None
+                db.session.commit()
+            except Exception as delete_error:
+                print(f"Warning: Failed to delete uploaded file {job.file_key}: {delete_error}")
 
         # Optionally retry
         if self.request.retries < self.max_retries:
