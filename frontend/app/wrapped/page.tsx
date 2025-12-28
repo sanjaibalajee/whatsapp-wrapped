@@ -676,7 +676,7 @@ function SummarySlide({ data }: { data: SummaryData }) {
     e.stopPropagation();
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
     const shareUrl = baseUrl;
-    const shareText = `Check out my WhatsApp Wrapped 2025! ${formatNumber(data.totalMessages)} messages, Brain Rot Score: ${data.brainRotScore} 🧠`;
+    const shareText = `Check out my WhatsApp Wrapped 2025! ${formatNumber(data.totalMessages)} messages, Brain Rot Score: ${data.brainRotScore} 🧠\n\nYou can try it here: ${shareUrl}`;
 
     if (navigator.share) {
       try {
@@ -812,7 +812,7 @@ function SummarySlide({ data }: { data: SummaryData }) {
   );
 }
 
-function OutroSlide({ onNewWrapped }: { onNewWrapped: () => void }) {
+function OutroSlide({ onNewWrapped, onShare }: { onNewWrapped: () => void; onShare: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center h-full px-8 text-center">
       <div className="w-16 h-16 mx-auto mb-6 flex items-center justify-center">
@@ -835,7 +835,13 @@ function OutroSlide({ onNewWrapped }: { onNewWrapped: () => void }) {
       </p>
 
       <div className="space-y-3">
-        <button className="w-full px-8 py-3.5 border-2 border-[#25D366] text-[#25D366] font-semibold rounded-xl hover:bg-[#25D366]/10 transition-all">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onShare();
+          }}
+          className="w-full px-8 py-3.5 border-2 border-[#25D366] text-[#25D366] font-semibold rounded-xl hover:bg-[#25D366]/10 transition-all"
+        >
           Share Your Wrapped
         </button>
 
@@ -1074,6 +1080,32 @@ export default function WrappedPage() {
     router.push("/");
   };
 
+  const handleShare = async () => {
+    // Get summary data from virtual slides
+    const summarySlide = virtualSlides.find(s => s.type === "summary");
+    const summaryData = summarySlide?.summaryData;
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+    const shareText = summaryData
+      ? `Check out my WhatsApp Wrapped 2025! ${formatNumber(summaryData.totalMessages)} messages, Brain Rot Score: ${summaryData.brainRotScore} 🧠\n\nYou can try it here: ${baseUrl}`
+      : `Check out my WhatsApp Wrapped 2025! 🧠\n\nYou can try it here: ${baseUrl}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'WhatsApp Wrapped 2025',
+          text: shareText,
+          url: baseUrl,
+        });
+      } catch {
+        // User cancelled
+      }
+    } else {
+      await navigator.clipboard.writeText(shareText);
+      alert('Copied to clipboard!');
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-screen w-screen bg-[#0a0a0a] flex items-center justify-center">
@@ -1115,7 +1147,7 @@ export default function WrappedPage() {
       case "intro":
         return <IntroSlide />;
       case "outro":
-        return <OutroSlide onNewWrapped={handleNewWrapped} />;
+        return <OutroSlide onNewWrapped={handleNewWrapped} onShare={handleShare} />;
       case "brain_rot":
         return currentVirtualSlide.slideData ? <BrainRotSlide data={currentVirtualSlide.slideData.data} /> : null;
       case "individual_roasts":
