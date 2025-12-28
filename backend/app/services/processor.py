@@ -3,17 +3,6 @@ Processing service - wraps existing parser and stats modules
 """
 
 import random
-import sys
-from pathlib import Path
-
-# Ensure root is in path for core package imports
-ROOT_DIR = Path(__file__).parent.parent.parent.parent  # whatsapp-wrapped/
-
-for path in ["/app", str(ROOT_DIR)]:
-    if path not in sys.path:
-        sys.path.insert(0, path)
-
-# Import from core package
 from core.parser import parse_whatsapp_content, detect_group_names, merge_similar_contacts
 from core.stats import (
     get_basic_stats, get_top_chatters, get_hourly_activity, get_daily_activity,

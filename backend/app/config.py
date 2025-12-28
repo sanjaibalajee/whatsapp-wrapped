@@ -11,8 +11,13 @@ class Config:
     # Flask (not critical for stateless API, but Flask requires it)
     SECRET_KEY = os.getenv("SECRET_KEY", os.urandom(32).hex())
 
-    # Database
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
+    # Database - convert to psycopg3 driver format
+    _db_url = os.getenv("DATABASE_URL", "")
+    if _db_url.startswith("postgresql://"):
+        _db_url = _db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    elif _db_url.startswith("postgres://"):
+        _db_url = _db_url.replace("postgres://", "postgresql+psycopg://", 1)
+    SQLALCHEMY_DATABASE_URI = _db_url or None
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,

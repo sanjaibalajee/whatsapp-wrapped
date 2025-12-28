@@ -2,9 +2,13 @@
 
 import sys
 import json
+from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
+
+# Add backend to path for core module
+sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 
 from core.parser import parse_whatsapp, detect_group_names, merge_similar_contacts
 from core.stats import (
