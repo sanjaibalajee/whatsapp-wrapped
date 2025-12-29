@@ -8,23 +8,64 @@ import { hasValidCache } from "./lib/cache";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
 
-async function uploadChat(file: File, year: string): Promise<ActionResult<UploadResponse>> {
+interface PresignResponse {
+  upload_url: string;
+  file_key: string;
+  max_size_mb: number;
+  expires_in: number;
+}
+
+async function uploadChat(
+  file: File,
+  year: string,
+  onProgress?: (stage: string) => void
+): Promise<ActionResult<UploadResponse>> {
   try {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("year", year);
+    // Step 1: Get presigned URL
+    onProgress?.("Getting upload URL...");
+    const presignRes = await fetch(`${API_BASE}/upload/presign`);
 
-    const response = await fetch(`${API_BASE}/upload`, {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      return { success: false, error: errorData.error || `Upload failed: ${response.statusText}` };
+    if (!presignRes.ok) {
+      const errorData = await presignRes.json().catch(() => ({}));
+      return { success: false, error: errorData.error || "Failed to get upload URL" };
     }
 
-    const data = await response.json();
+    const presignData: PresignResponse = await presignRes.json();
+
+    // Step 2: Upload directly to R2
+    onProgress?.("Uploading file...");
+    const uploadRes = await fetch(presignData.upload_url, {
+      method: "PUT",
+      body: file,
+      headers: {
+        "Content-Type": "text/plain",
+      },
+    });
+
+    if (!uploadRes.ok) {
+      return { success: false, error: `Upload failed: ${uploadRes.statusText}` };
+    }
+
+    // Step 3: Confirm upload with backend
+    onProgress?.("Processing...");
+    const confirmRes = await fetch(`${API_BASE}/upload/confirm`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        file_key: presignData.file_key,
+        filename: file.name,
+        year: year,
+      }),
+    });
+
+    if (!confirmRes.ok) {
+      const errorData = await confirmRes.json().catch(() => ({}));
+      return { success: false, error: errorData.error || "Failed to process upload" };
+    }
+
+    const data = await confirmRes.json();
     return { success: true, data };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "Upload failed" };
@@ -37,6 +78,7 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string>("Processing...");
   const [error, setError] = useState<string | null>(null);
   const [checkingCache, setCheckingCache] = useState(true);
 
@@ -81,8 +123,11 @@ export default function Home() {
 
     setIsUploading(true);
     setError(null);
+    setUploadStatus("Getting upload URL...");
 
-    const result = await uploadChat(file, "2025");
+    const result = await uploadChat(file, "2025", (stage) => {
+      setUploadStatus(stage);
+    });
 
     if (!result.success) {
       setError(result.error);
@@ -225,7 +270,7 @@ export default function Home() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                <span>Processing...</span>
+                <span>{uploadStatus}</span>
               </>
             ) : (
               "See Your Wrapped"

@@ -141,6 +141,27 @@ class StorageService:
         response = self.client.head_object(Bucket=self.bucket, Key=key)
         return response["ContentLength"]
 
+    def generate_presigned_upload_url(
+        self, prefix: str = "uploads", expires_in: int = 3600, max_size_mb: int = 20
+    ) -> tuple[str, str]:
+        """
+        Generate a presigned URL for direct upload to R2
+        Returns (presigned_url, file_key)
+        """
+        key = f"{prefix}/{uuid.uuid4()}.txt"
+
+        presigned_url = self.client.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": self.bucket,
+                "Key": key,
+                "ContentType": "text/plain",
+            },
+            ExpiresIn=expires_in,
+        )
+
+        return presigned_url, key, max_size_mb
+
 
 # Singleton instance
 storage = StorageService()

@@ -8,22 +8,62 @@ from ..models import Job
 from ..services.storage import storage
 from ..services.cache import cache
 from ..services.processor import quick_parse_participants
-from ..utils.security import validate_file_upload, validate_year
+from ..utils.security import validate_file_content, validate_year
 from ..tasks.processing import process_chat_task
 
 upload_bp = Blueprint("upload", __name__)
 
 
-@upload_bp.route("/upload", methods=["POST"])
+@upload_bp.route("/upload/presign", methods=["GET"])
 @limiter.limit(lambda: current_app.config.get("RATE_LIMIT_UPLOADS", "10/hour"))
-def upload_chat():
+def get_presigned_url():
     """
-    Upload a WhatsApp chat export file and get participants
+    Get a presigned URL for direct upload to R2
 
     ---
-    Request:
-        - file: The chat export .txt file (multipart/form-data)
-        - year: (optional) Year to filter messages (default: 2025)
+    Response:
+        {
+            "upload_url": "https://...",
+            "file_key": "uploads/uuid.txt",
+            "max_size_mb": 20,
+            "expires_in": 3600
+        }
+    """
+    current_app.logger.info(f"Presign request from {request.remote_addr}")
+
+    try:
+        max_size = current_app.config.get("MAX_FILE_SIZE_MB", 20)
+        upload_url, file_key, max_size_mb = storage.generate_presigned_upload_url(
+            prefix="uploads",
+            expires_in=3600,
+            max_size_mb=max_size,
+        )
+
+        return {
+            "upload_url": upload_url,
+            "file_key": file_key,
+            "max_size_mb": max_size_mb,
+            "expires_in": 3600,
+        }, 200
+
+    except Exception as e:
+        current_app.logger.error(f"Presign error: {e}", exc_info=True)
+        return {"error": "Failed to generate upload URL"}, 500
+
+
+@upload_bp.route("/upload/confirm", methods=["POST"])
+@limiter.limit(lambda: current_app.config.get("RATE_LIMIT_UPLOADS", "10/hour"))
+def confirm_upload():
+    """
+    Confirm upload and validate file after direct R2 upload
+
+    ---
+    Request (JSON):
+        {
+            "file_key": "uploads/uuid.txt",
+            "filename": "chat.txt",
+            "year": "2025"
+        }
 
     Response:
         {
@@ -33,51 +73,67 @@ def upload_chat():
             "group_name": "Group Name"
         }
     """
-    current_app.logger.info(f"Upload request received from {request.remote_addr}")
+    data = request.get_json()
 
-    # Check for file
-    if "file" not in request.files:
-        current_app.logger.warning("Upload rejected - No file in request")
-        return {"error": "No file provided"}, 400
+    if not data:
+        return {"error": "JSON body required"}, 400
 
-    file = request.files["file"]
-    current_app.logger.info(f"File received: {file.filename}, content_type: {file.content_type}")
+    file_key = data.get("file_key")
+    filename = data.get("filename", "chat.txt")
 
-    # Validate file
-    is_valid, error_msg = validate_file_upload(file)
-    if not is_valid:
-        current_app.logger.warning(f"Upload rejected - Validation failed: {error_msg}")
-        return {"error": error_msg}, 400
+    if not file_key:
+        return {"error": "file_key is required"}, 400
 
     # Validate year
-    year_param = request.form.get("year")
+    year_param = data.get("year")
     is_valid, year, error_msg = validate_year(year_param)
     if not is_valid:
         return {"error": error_msg}, 400
 
-    try:
-        # Get file size and content
-        file.seek(0, 2)
-        file_size = file.tell()
-        file.seek(0)
-        file_content = file.read().decode("utf-8")
-        file.seek(0)
+    current_app.logger.info(f"Confirm upload for {file_key} from {request.remote_addr}")
 
-        # Quick parse to get participants (sync - fast operation)
+    try:
+        # Check file exists in R2
+        if not storage.file_exists(file_key):
+            return {"error": "File not found. Upload may have failed."}, 404
+
+        # Get file size
+        file_size = storage.get_file_size(file_key)
+        max_size = current_app.config.get("MAX_FILE_SIZE_MB", 20) * 1024 * 1024
+
+        if file_size > max_size:
+            storage.delete_file(file_key)
+            return {"error": f"File too large. Maximum size is {max_size // (1024*1024)}MB"}, 400
+
+        # Download and validate content
+        file_content_bytes = storage.download_file(file_key)
+
+        try:
+            file_content = file_content_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            storage.delete_file(file_key)
+            return {"error": "Invalid file encoding. Please export chat as text file."}, 400
+
+        # Validate file content
+        is_valid, error_msg = validate_file_content(file_content)
+        if not is_valid:
+            storage.delete_file(file_key)
+            current_app.logger.warning(f"Upload rejected - Validation failed: {error_msg}")
+            return {"error": error_msg}, 400
+
+        # Quick parse to get participants
         participants, group_name = quick_parse_participants(file_content)
         current_app.logger.info(f"Parsed {len(participants)} participants, group: {group_name}")
 
         if not participants:
+            storage.delete_file(file_key)
             current_app.logger.warning("Upload rejected - No participants found after parsing")
-            return {"error": "No participants found in chat"}, 400
-
-        # Upload file to R2
-        file_key = storage.upload_file(file, prefix="uploads")
+            return {"error": "No participants found in chat. Please ensure this is a WhatsApp chat export."}, 400
 
         # Create job record with participants
         job = Job(
             status=Job.STATUS_AWAITING_SELECTION,
-            original_filename=file.filename,
+            original_filename=filename,
             file_key=file_key,
             file_size=file_size,
             year_filter=year,
@@ -92,7 +148,7 @@ def upload_chat():
         # Cache initial status
         cache.set_job_status(str(job.id), job.to_status_dict())
 
-        current_app.logger.info(f"Upload successful - Job {job.id} created with {len(participants)} participants")
+        current_app.logger.info(f"Upload confirmed - Job {job.id} created with {len(participants)} participants")
 
         return {
             "job_id": str(job.id),
@@ -102,7 +158,12 @@ def upload_chat():
         }, 200
 
     except Exception as e:
-        current_app.logger.error(f"Upload error: {e}", exc_info=True)
+        current_app.logger.error(f"Confirm upload error: {e}", exc_info=True)
+        # Try to clean up the file
+        try:
+            storage.delete_file(file_key)
+        except Exception:
+            pass
         return {"error": "Failed to process upload"}, 500
 
 

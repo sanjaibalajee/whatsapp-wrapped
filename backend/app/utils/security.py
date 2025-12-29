@@ -135,6 +135,48 @@ def validate_year(year: int | str | None) -> tuple[bool, int, str]:
     return True, year_int, ""
 
 
+def validate_file_content(content: str) -> tuple[bool, str]:
+    """
+    Validate file content looks like a WhatsApp export
+
+    Args:
+        content: The file content as a string
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not content or len(content.strip()) == 0:
+        return False, "File is empty"
+
+    # Check first portion of content
+    sample = content[:5000]
+
+    # Log first few lines for debugging
+    first_lines = sample[:500].split('\n')[:5]
+    current_app.logger.info(f"Content validation - First lines preview: {first_lines}")
+
+    # Support multiple WhatsApp timestamp formats
+    patterns = [
+        r'\[\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}(?::\d{2})?\s?(?:[APap][Mm])?\]',  # Bracketed formats
+        r'\d{1,2}/\d{1,2}/\d{2,4},\s\d{1,2}:\d{2}(?::\d{2})?\s?(?:[APap][Mm])?\s?[-–]',  # Non-bracketed with dash
+    ]
+
+    total_matches = 0
+    pattern_matches = {}
+    for pattern in patterns:
+        matches = re.findall(pattern, sample)
+        pattern_matches[pattern[:30]] = len(matches)
+        total_matches += len(matches)
+
+    current_app.logger.info(f"Content validation - Pattern matches: {pattern_matches}, total: {total_matches}")
+
+    if total_matches < 2:
+        current_app.logger.warning(f"Content rejected - Not enough WhatsApp patterns found. Total matches: {total_matches}")
+        return False, "File doesn't appear to be a WhatsApp chat export. Please ensure you're uploading a .txt file exported directly from WhatsApp."
+
+    return True, ""
+
+
 def validate_uuid(uuid_str: str) -> tuple[bool, str]:
     """
     Validate UUID format
